@@ -1,8 +1,8 @@
 import time
 import threading
 import utils
-from picamera2 import Picamera2
-import libcamera
+from picamera.array import PiRGBArray
+from picamera import PiCamera
 import cv2
 import numpy as np
 
@@ -10,9 +10,8 @@ import numpy as np
 thread_video_running = False
 thread_detection_running = False
 # Camera controls
-picam2 = None
+cameraDevice = None
 latest_frame = None
-frame_available = False
 # Tracking controls
 motion_detection_active = False
 motion_detected = False
@@ -22,48 +21,49 @@ target_locked = False
 tracking_angle = 0
 
 def video_thread():
-    global picam2
+    global cameraDevice
     global latest_frame
     global thread_video_running
-    global frame_available
-    picam2 = Picamera2()
-    picam2.configure(picam2.create_preview_configuration(main={"format": 'XRGB8888', "size": (160, 120)}, transform=libcamera.Transform(hflip=1, vflip=1)))
-    picam2.start()
-    print ("Video Capture Running...")
-    while thread_video_running:
-        frame_available = True
-        latest_frame = picam2.capture_array()
-        frame_available = False
-        if target_tracking_active:
-            time.sleep(0.01)
-        if motion_detection_active:
-            time.sleep(0.05)
-    print ("Video Capture Stopping...")
-    picam2.stop()
+    cameraDevice = PiCamera()
+    cameraDevice.resolution = (480, 368)
+    cameraDevice.framerate = 15
+    cameraDevice.rotation = 180
+    time.sleep(2)
+
+    rawCapture = PiRGBArray(cameraDevice, size=(480, 368))
+    stream = cameraDevice.capture_continuous(rawCapture, format="bgr", use_video_port=True)
+    for f in stream:
+        latest_frame = f.array
+        rawCapture.truncate(0)
+        if thread_video_running == False:
+            stream.close()
+            rawCapture.close()
+            cameraDevice.close()
+            return 
 
 def detection_thread():
     global latest_frame
-    global frame_available
     global motion_detected
     global target_locked
     global tracking_angle
     old_frame = None
-    tracking_location_buffer = [0, 0, 0, 0]
+    tracking_location_buffer = [0, 0, 0]
     threshold = 20
-    sensitivity = 9000
-    tracking_accuracy = 8
-    object_detector = cv2.createBackgroundSubtractorMOG2(history=5, varThreshold=10, detectShadows = False)
+    sensitivity = 80000
+    tracking_accuracy = 15
+    object_detector = cv2.createBackgroundSubtractorMOG2(history=20, varThreshold=5, detectShadows = False)
     #object_detector = cv2.bgsegm.createBackgroundSubtractorMOG()
     refresh_rate = 0.07
     while thread_video_running:
-        if frame_available == False:
+        if tracking_accuracy == 4444:
             time.sleep(refresh_rate)
-            frame_available = frame_available
         else:
             if motion_detection_active:
+                time.sleep(0.1)
                 refresh_rate = 0.05
                 pixel_color = 1 # red=0 green=1 blue=2
                 pixel_changes = (np.absolute(old_frame[...,pixel_color]-latest_frame[...,pixel_color])>threshold).sum()
+                #print("Found Motion threshold=%s  sensitivity=%s changes=%s" % ( threshold, sensitivity, pixel_changes ))
                 if pixel_changes > sensitivity:
                     motion_detected = True
                     print("Found Motion threshold=%s  sensitivity=%s changes=%s" % ( threshold, sensitivity, pixel_changes ))
@@ -71,6 +71,7 @@ def detection_thread():
                 
             elif target_tracking_active:
                 refresh_rate = 0.01
+                time.sleep(0.05)
                 gray = cv2.cvtColor(latest_frame, cv2.COLOR_BGR2GRAY)
                 gray = cv2.GaussianBlur(gray, (7, 7), 0)
                 #cv2.imwrite("/home/turret/glados/test.jpg", gray)
@@ -82,23 +83,23 @@ def detection_thread():
                     c = max(contours, key = cv2.contourArea)
                     x,y,w,h = cv2.boundingRect(c)
                     #print("x " + str(x) + " y " + str(y) + " w " + str(w) + " h " + str(h))
-                    angle = utils.map(float(x+(float(w)/2.0)), 0, 160, 0, 200)
+                    angle = utils.map(float(x+(float(w)/2.0)), 0, 480, 0, 200)
                     # draw the biggest contour (c) in green
                     cv2.rectangle(gray,(x,y),(x+w,y+h),(255,0,0),2)
                     # Display the resulting frame
-                    #cv2.imwrite("/home/turret/glados/test_cont.jpg", gray)
 
                     tracking_location_buffer.append(angle)
                     tracking_location_buffer.pop(0)
-                    #print(str(tracking_location_buffer))
+                    print(str(tracking_location_buffer))
                     if (max(tracking_location_buffer) - min(tracking_location_buffer)) < tracking_accuracy and target_locked == False:
-                        #cv2.imwrite("/home/turret/glados/test_thres.jpg", thresh)
-                        tracking_angle = int((tracking_location_buffer[0]+tracking_location_buffer[1]+tracking_location_buffer[2]+tracking_location_buffer[3])/4)
+                        cv2.imwrite("/home/turret/test_thres.jpg", thresh)
+                        tracking_angle = int((tracking_location_buffer[0]+tracking_location_buffer[1]+tracking_location_buffer[2])/3)
                         target_locked = True
                         print(str(tracking_location_buffer) + str(int(tracking_angle)))
-                        #cv2.imwrite("/home/turret/glados/test_cont.jpg", gray)
+                        cv2.imwrite("/home/turret/test_cont.jpg", gray)
             else:
                 old_frame = latest_frame
+                time.sleep(0.1)
 
 def start_video_thread():
     global thread_video_running
