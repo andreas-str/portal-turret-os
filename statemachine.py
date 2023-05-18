@@ -19,9 +19,14 @@ class ProcessState(Enum):
     TARGET_LOCKED = 7
     TARGET_LOST = 8
     ERROR = 9
-    PARTY_MODE = 10
+    DUMMY_SEARCH = 10
+    PARTY_MODE = 11
 
-
+class SystemMode(Enum):
+    DEFAULT = 0
+    NO_MOTION_DETECT = 1
+    NO_TRACKING = 2
+    PARTY_MODE = 3
 
 def start_up():
     # Start pigpio and check if its running correctly.
@@ -65,13 +70,15 @@ def process_manager():
     try:
         # Keep the state machine running if all threads are runnings
         while check_threads() == 0:
+            # Mode controller
+            Mode = SystemMode.PARTY_MODE
             # State error controller
             if NextState == ProcessState.ERROR:
                 Error_raised_at = State
             # State debug info
             if NextState != State:
                 #print ("Last State: " + str(State) + " - Current State: " + str(NextState))
-                print ("Current State: " + str(NextState))
+                print ("Current State: " + str(NextState) + " Current Mode: " + str(Mode))
             # State controller
             State = NextState
             # Sounds delay controller (runs forever with the main loop, keeps track of delays between sounds)
@@ -95,12 +102,17 @@ def process_manager():
                     NextState = ProcessState.STANDBY
 
             elif State == ProcessState.STANDBY:
-                camera.detecting_movement_controller(True)
-                time.sleep(0.05)
-                if camera.detected_movement() == True:
-                    NextState = ProcessState.DETECTED_MOVEMENT
-                else:
+                if Mode == SystemMode.NO_MOTION_DETECT:
                     NextState = ProcessState.STANDBY
+                elif Mode == SystemMode.PARTY_MODE:
+                    NextState = ProcessState.PARTY_MODE
+                else:
+                    camera.detecting_movement_controller(True)
+                    time.sleep(0.1)
+                    if camera.detected_movement() == True:
+                        NextState = ProcessState.DETECTED_MOVEMENT
+                    else:
+                        NextState = ProcessState.STANDBY
 
             elif State == ProcessState.DETECTED_MOVEMENT:
                 camera.detecting_movement_controller(False)
@@ -113,9 +125,13 @@ def process_manager():
 
             elif State == ProcessState.PREPARE_FOR_SEARCHING_TAGET:
                 Search_timeout_counter_start = time.time()
-                camera.tracking_controller(True)
-                time.sleep(0.2)
-                NextState = ProcessState.SEARCHING_TARGET
+                if Mode == SystemMode.NO_TRACKING:
+                    time.sleep(0.4)
+                    NextState = ProcessState.DUMMY_SEARCH
+                else:
+                    camera.tracking_controller(True)
+                    time.sleep(0.4)
+                    NextState = ProcessState.SEARCHING_TARGET
             
             elif State == ProcessState.SEARCHING_TARGET:
                 sounds.play_searching(10000)
@@ -158,14 +174,29 @@ def process_manager():
                 movements.go_to_target_lost()
                 camera.tracking_finished()
                 NextState = ProcessState.PREPARE_FOR_SEARCHING_TAGET
+                
+            elif State == ProcessState.DUMMY_SEARCH:
+                sounds.play_searching(5)
+                movements.go_to_searching()
+                time.sleep(1)
+                if (time.time() - Search_timeout_counter_start) >= utils.SEARCH_TIMEOUT:
+                    sounds.stop_searching()
+                    time.sleep(1) # Gives us some time to stop any already playing sounds
+                    sounds.play_deactivated()
+                    movements.go_to_standby()
+                    NextState = ProcessState.STANDBY
+                else:
+                    NextState = ProcessState.DUMMY_SEARCH
 
             elif State == ProcessState.PARTY_MODE:
-                party_song = utils.OPERA
+                party_song = utils.WIFE
+                movements.go_to_activated()
                 sounds.play_party(party_song)
                 movements.go_to_party(party_song)
-                time.sleep(0.1) # Gives us some time to stop partying
+                time.sleep(20) # Gives us some time to stop partying
                 sounds.play_deactivated()
                 movements.go_to_standby()
+                time.sleep(1)
                 NextState = ProcessState.STANDBY
                 
             elif State == ProcessState.ERROR:

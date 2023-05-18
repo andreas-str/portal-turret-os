@@ -53,53 +53,41 @@ def detection_thread():
     tracking_accuracy = 15
     object_detector = cv2.createBackgroundSubtractorMOG2(history=20, varThreshold=5, detectShadows = False)
     #object_detector = cv2.bgsegm.createBackgroundSubtractorMOG()
-    refresh_rate = 0.07
     while thread_video_running:
-        if tracking_accuracy == 4444:
-            time.sleep(refresh_rate)
-        else:
-            if motion_detection_active:
-                time.sleep(0.1)
-                refresh_rate = 0.05
-                pixel_color = 1 # red=0 green=1 blue=2
-                pixel_changes = (np.absolute(old_frame[...,pixel_color]-latest_frame[...,pixel_color])>threshold).sum()
-                #print("Found Motion threshold=%s  sensitivity=%s changes=%s" % ( threshold, sensitivity, pixel_changes ))
-                if pixel_changes > sensitivity:
-                    motion_detected = True
-                    print("Found Motion threshold=%s  sensitivity=%s changes=%s" % ( threshold, sensitivity, pixel_changes ))
-                old_frame = latest_frame
+        old_frame = latest_frame
+        time.sleep(0.07)
+        if motion_detection_active:
+            pixel_color = 1 # red=0 green=1 blue=2
+            pixel_changes = (np.absolute(old_frame[...,pixel_color]-latest_frame[...,pixel_color])>threshold).sum()
+            if pixel_changes > sensitivity:
+                motion_detected = True
+                print("Found Motion threshold=%s  sensitivity=%s changes=%s" % ( threshold, sensitivity, pixel_changes ))
                 
-            elif target_tracking_active:
-                refresh_rate = 0.01
-                time.sleep(0.05)
-                gray = cv2.cvtColor(latest_frame, cv2.COLOR_BGR2GRAY)
-                gray = cv2.GaussianBlur(gray, (7, 7), 0)
-                #cv2.imwrite("/home/turret/glados/test.jpg", gray)
-                thresh = object_detector.apply(gray)
-                contours,hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-                if len(contours)>0:
-                    cv2.drawContours(gray, contours, -1, (0,255,0), 5)
-                    # find the biggest countour (c) by the area
-                    c = max(contours, key = cv2.contourArea)
-                    x,y,w,h = cv2.boundingRect(c)
-                    #print("x " + str(x) + " y " + str(y) + " w " + str(w) + " h " + str(h))
-                    angle = utils.map(float(x+(float(w)/2.0)), 0, 480, 0, 200)
-                    # draw the biggest contour (c) in green
-                    cv2.rectangle(gray,(x,y),(x+w,y+h),(255,0,0),2)
-                    # Display the resulting frame
+        elif target_tracking_active:
+            gray = cv2.cvtColor(latest_frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.GaussianBlur(gray, (7, 7), 0)
+            thresh = object_detector.apply(gray)
+            contours,hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            if len(contours)>0:
+                cv2.drawContours(gray, contours, -1, (0,255,0), 5)
+                # find the biggest countour (c) by the area
+                c = max(contours, key = cv2.contourArea)
+                x,y,w,h = cv2.boundingRect(c)
+                #print("x " + str(x) + " y " + str(y) + " w " + str(w) + " h " + str(h))
+                angle = utils.map(float(x+(float(w)/2.0)), 0, 480, 0, 200)
+                # draw the biggest contour (c) in green
+                cv2.rectangle(gray,(x,y),(x+w,y+h),(255,0,0),2)
+                # Display the resulting frame
 
-                    tracking_location_buffer.append(angle)
-                    tracking_location_buffer.pop(0)
-                    print(str(tracking_location_buffer))
-                    if (max(tracking_location_buffer) - min(tracking_location_buffer)) < tracking_accuracy and target_locked == False:
-                        cv2.imwrite("/home/turret/test_thres.jpg", thresh)
-                        tracking_angle = int((tracking_location_buffer[0]+tracking_location_buffer[1]+tracking_location_buffer[2])/3)
-                        target_locked = True
-                        print(str(tracking_location_buffer) + str(int(tracking_angle)))
-                        cv2.imwrite("/home/turret/test_cont.jpg", gray)
-            else:
-                old_frame = latest_frame
-                time.sleep(0.1)
+                tracking_location_buffer.append(angle)
+                tracking_location_buffer.pop(0)
+                print(str(tracking_location_buffer))
+                if (max(tracking_location_buffer) - min(tracking_location_buffer)) < tracking_accuracy and target_locked == False:
+                    cv2.imwrite("/home/turret/test_thres.jpg", thresh)
+                    tracking_angle = int((tracking_location_buffer[0]+tracking_location_buffer[1]+tracking_location_buffer[2])/3)
+                    target_locked = True
+                    print(str(tracking_location_buffer) + str(int(tracking_angle)))
+                    cv2.imwrite("/home/turret/test_cont.jpg", gray)
 
 def start_video_thread():
     global thread_video_running

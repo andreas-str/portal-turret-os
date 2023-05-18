@@ -52,9 +52,9 @@ def go_to_activated():
     return 0
 
 def go_to_searching():
-    wing_rotate_pos = random.randint(0,50)
+    wing_rotate_pos = random.randint(0,80)
     wing_rotate_dir = random.randint(utils.WING_UP,utils.WING_DOWN)
-    turret_rotate_pos = random.randint(0,90)
+    turret_rotate_pos = random.randint(0,50)
     turret_rotate_dir = random.randint(utils.TURRET_LEFT,utils.TURRET_RIGHT)
     status = servo.rotate_wings(wing_rotate_dir, wing_rotate_pos)
     status = servo.rotate_turret(turret_rotate_dir, turret_rotate_pos)
@@ -85,8 +85,8 @@ def go_to_target_firing(max_time):
 def go_to_target_lost():
     wing_rotate_pos = random.randint(0,20)
     wing_rotate_dir = random.randint(utils.WING_UP,utils.WING_DOWN)
-    turret_rotate_pos = random.randint(0,40)
-    turret_rotate_dir = random.randint(utils.TURRET_LEFT,utils.TURRET_LEFT)
+    turret_rotate_pos = 0
+    turret_rotate_dir = utils.TURRET_LEFT
     status = servo.rotate_wings(wing_rotate_dir, wing_rotate_pos)
     status = servo.rotate_turret(turret_rotate_dir, turret_rotate_pos)
     time.sleep(1)
