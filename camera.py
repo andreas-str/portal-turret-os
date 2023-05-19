@@ -26,7 +26,7 @@ def video_thread():
     global thread_video_running
     cameraDevice = PiCamera()
     cameraDevice.resolution = (480, 368)
-    cameraDevice.framerate = 15
+    cameraDevice.framerate = 10
     cameraDevice.rotation = 180
     time.sleep(2)
 

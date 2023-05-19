@@ -1,7 +1,6 @@
 import statemachine
 import sys
 import servo
-#import cProfile
 
 
 def main():
@@ -9,7 +8,7 @@ def main():
     print("--------- Aperture Science -----------")
     print("----------- Sentry Turret ------------")
     print("--------------------------------------")
-    print("GlaDOS Version: 0.1 Alpha")
+    print("Turret OS Version: 0.2 Alpha")
     print("Starting up...")
     status = statemachine.start_up()
     if status == 0:
@@ -26,7 +25,6 @@ def main():
         return 2
 
 try:
-    #cProfile.run("main()")
     main()
 except KeyboardInterrupt:
     print(" Exited from Ctrl C")

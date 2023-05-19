@@ -3,6 +3,7 @@ import servo
 import sounds
 import camera
 import movements
+#import remote
 import traceback
 from enum import Enum
 import time
@@ -71,7 +72,7 @@ def process_manager():
         # Keep the state machine running if all threads are runnings
         while check_threads() == 0:
             # Mode controller
-            Mode = SystemMode.PARTY_MODE
+            Mode = SystemMode.NO_TRACKING
             # State error controller
             if NextState == ProcessState.ERROR:
                 Error_raised_at = State
@@ -103,6 +104,7 @@ def process_manager():
 
             elif State == ProcessState.STANDBY:
                 if Mode == SystemMode.NO_MOTION_DETECT:
+                    time.sleep(0.1)
                     NextState = ProcessState.STANDBY
                 elif Mode == SystemMode.PARTY_MODE:
                     NextState = ProcessState.PARTY_MODE
