@@ -13,6 +13,8 @@ pygame.mixer.init(buffer=3072)
 
 deploy_sound = pygame.mixer.Sound("sounds/Deploy.wav")
 error_sound = pygame.mixer.Sound("sounds/Error.wav")
+restart_sound = pygame.mixer.Sound("sounds/Restarting.wav")
+ping = pygame.mixer.Sound("sounds/Ping.wav")
 guns_sound = pygame.mixer.Sound("sounds/Gun.wav")
 
 activated = []
@@ -72,6 +74,9 @@ def play_deploy_sound():
 
 def play_error_sound():
     error_sound.play()
+    
+def play_restarting_sound():
+    restart_sound.play()
 
 def play_activated():
     random.shuffle(activated)

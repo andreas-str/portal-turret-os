@@ -14,6 +14,8 @@ WIFE = 21
 
 # Search timeout in seconds
 SEARCH_TIMEOUT = 25
+# Companion cube mac address
+CUBE_MAC_ADDRESS = "34:85:18:05:9B:E6"
 
 def map(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min

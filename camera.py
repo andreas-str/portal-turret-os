@@ -42,7 +42,6 @@ def video_thread():
             return 
 
 def detection_thread():
-    global latest_frame
     global motion_detected
     global target_locked
     global tracking_angle
@@ -53,7 +52,7 @@ def detection_thread():
     tracking_accuracy = 15
     object_detector = cv2.createBackgroundSubtractorMOG2(history=20, varThreshold=5, detectShadows = False)
     #object_detector = cv2.bgsegm.createBackgroundSubtractorMOG()
-    while thread_video_running:
+    while thread_video_running and thread_detection_running:
         old_frame = latest_frame
         time.sleep(0.07)
         if motion_detection_active:
@@ -83,11 +82,11 @@ def detection_thread():
                 tracking_location_buffer.pop(0)
                 print(str(tracking_location_buffer))
                 if (max(tracking_location_buffer) - min(tracking_location_buffer)) < tracking_accuracy and target_locked == False:
-                    cv2.imwrite("/home/turret/test_thres.jpg", thresh)
+                    #cv2.imwrite("/home/turret/test_thres.jpg", thresh)
                     tracking_angle = int((tracking_location_buffer[0]+tracking_location_buffer[1]+tracking_location_buffer[2])/3)
                     target_locked = True
                     print(str(tracking_location_buffer) + str(int(tracking_angle)))
-                    cv2.imwrite("/home/turret/test_cont.jpg", gray)
+                    #cv2.imwrite("/home/turret/test_cont.jpg", gray)
 
 def start_video_thread():
     global thread_video_running

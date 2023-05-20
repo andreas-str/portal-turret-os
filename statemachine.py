@@ -3,7 +3,7 @@ import servo
 import sounds
 import camera
 import movements
-#import remote
+import remote
 import traceback
 from enum import Enum
 import time
@@ -44,21 +44,28 @@ def start_up():
     status = camera.start_detection_thread()
     if status != 0:
         return "start_detection" + str(status)
+    # Now we can start the BLE thread
+    status = remote.start_BLE_thread()
+    if status != 0:
+        return "start_BLE" + str(status)
     # All good, return 0
     return 0
 
 def check_threads():
     # Check if all threads are still running
-    status = 2
+    status = 3
     if camera.thread_video_running == True:
-        status = 1
+        status = 2
     if camera.thread_detection_running == True:
+        status = 1
+    if remote.thread_BLE_running == True:
         status = 0
     return status
 
 def kill_all_threads():
     camera.stop_video_thread()
     camera.stop_detection_thread()
+    remote.stop_BLE_thread()
     return 0
 
 
@@ -72,7 +79,8 @@ def process_manager():
         # Keep the state machine running if all threads are runnings
         while check_threads() == 0:
             # Mode controller
-            Mode = SystemMode.NO_TRACKING
+            Mode = remote.get_new_mode()
+            print(Mode)
             # State error controller
             if NextState == ProcessState.ERROR:
                 Error_raised_at = State
@@ -211,6 +219,8 @@ def process_manager():
         print("Process Manager stopped with an error")
         kill_all_threads()
         servo.disable_servos()
+        sounds.play_restarting_sound()
+        time.sleep(2)
         return 1
 
     except Exception as e:
@@ -218,6 +228,8 @@ def process_manager():
         traceback.print_exc()
         servo.disable_servos()
         kill_all_threads()
+        sounds.play_error_sound()
+        time.sleep(2)
         return -1
         ########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ##########TEMP CHANGE TO 1 WHEN THE STARTER SCRIPT IS ADDED ####
