@@ -1,9 +1,7 @@
 import utils
 import servo
 import sounds
-import camera
 import movements
-import remote
 import traceback
 from enum import Enum
 import time
@@ -23,71 +21,30 @@ class ProcessState(Enum):
     DUMMY_SEARCH = 10
     PARTY_MODE = 11
 
-class SystemMode(Enum):
-    DEFAULT = 0
-    NO_MOTION_DETECT = 1
-    NO_TRACKING = 2
-    PARTY_MODE = 3
-
 def start_up():
     # Start pigpio and check if its running correctly.
     status = servo.start_gpio()
     if status != 0:
         return "start_gpio :" + str(status)
-    # Start the video stream in a thread
-    status = camera.start_video_thread()
-    if status != 0:
-        return "start_video: " + str(status)
-    # Let the camera stream startup properly
-    time.sleep(2)
-    # If video is running, start detecting thread
-    status = camera.start_detection_thread()
-    if status != 0:
-        return "start_detection" + str(status)
-    # Now we can start the BLE thread
-    status = remote.start_BLE_thread()
-    if status != 0:
-        return "start_BLE" + str(status)
-    # All good, return 0
     return 0
-
-def check_threads():
-    # Check if all threads are still running
-    status = 3
-    if camera.thread_video_running == True:
-        status = 2
-    if camera.thread_detection_running == True:
-        status = 1
-    if remote.thread_BLE_running == True:
-        status = 0
-    return status
-
-def kill_all_threads():
-    camera.stop_video_thread()
-    camera.stop_detection_thread()
-    remote.stop_BLE_thread()
-    return 0
-
 
 def process_manager():
     State = None
     Error_raised_at = None
-    Search_timeout_counter_start = 0
     NextState = ProcessState.INIT
+    Search_timeout_counter_start = 0
+    Detected = False
 
     try:
-        # Keep the state machine running if all threads are runnings
-        while check_threads() == 0:
-            # Mode controller
-            Mode = remote.get_new_mode()
-            print(Mode)
+        # Keep the state machine running
+        while True:
             # State error controller
             if NextState == ProcessState.ERROR:
                 Error_raised_at = State
             # State debug info
             if NextState != State:
                 #print ("Last State: " + str(State) + " - Current State: " + str(NextState))
-                print ("Current State: " + str(NextState) + " Current Mode: " + str(Mode))
+                print ("Current State: " + str(NextState))
             # State controller
             State = NextState
             # Sounds delay controller (runs forever with the main loop, keeps track of delays between sounds)
@@ -98,6 +55,7 @@ def process_manager():
             # Initial state, only here once, at the beginning
             if State == ProcessState.INIT:
                 servo.home_servos()
+                servo.amp_power(1)
                 sounds.play_deploy_sound()
                 time.sleep(0.5)
                 # make sure camera works
@@ -111,81 +69,22 @@ def process_manager():
                     NextState = ProcessState.STANDBY
 
             elif State == ProcessState.STANDBY:
-                if Mode == SystemMode.NO_MOTION_DETECT:
-                    time.sleep(0.1)
-                    NextState = ProcessState.STANDBY
-                elif Mode == SystemMode.PARTY_MODE:
-                    NextState = ProcessState.PARTY_MODE
-                else:
-                    camera.detecting_movement_controller(True)
-                    time.sleep(0.1)
-                    if camera.detected_movement() == True:
-                        NextState = ProcessState.DETECTED_MOVEMENT
-                    else:
-                        NextState = ProcessState.STANDBY
+                servo.amp_power(0)
+                time.sleep(1)
+                NextState = ProcessState.STANDBY
+                if Detected == True:
+                    servo.amp_power(1)
+                    NextState = ProcessState.DETECTED_MOVEMENT
 
             elif State == ProcessState.DETECTED_MOVEMENT:
-                camera.detecting_movement_controller(False)
                 sounds.play_deploy_sound()
                 time.sleep(0.6)
                 sounds.play_activated()
                 movements.go_to_activated()
                 time.sleep(0.3)
-                NextState = ProcessState.PREPARE_FOR_SEARCHING_TAGET
+                NextState = ProcessState.SEARCHING_TARGET
 
-            elif State == ProcessState.PREPARE_FOR_SEARCHING_TAGET:
-                Search_timeout_counter_start = time.time()
-                if Mode == SystemMode.NO_TRACKING:
-                    time.sleep(0.4)
-                    NextState = ProcessState.DUMMY_SEARCH
-                else:
-                    camera.tracking_controller(True)
-                    time.sleep(0.4)
-                    NextState = ProcessState.SEARCHING_TARGET
-            
             elif State == ProcessState.SEARCHING_TARGET:
-                sounds.play_searching(10000)
-                status, angle = camera.tracking_status()
-                if status == 1:
-                    sounds.stop_searching()
-                    time.sleep(0.1)
-                    NextState = ProcessState.TARGET_TRACKING
-                elif (time.time() - Search_timeout_counter_start) >= utils.SEARCH_TIMEOUT:
-                    camera.tracking_controller(False)
-                    sounds.stop_searching()
-                    time.sleep(0.5) # Gives us some time to stop any already playing sounds
-                    sounds.play_deactivated()
-                    movements.go_to_standby()
-                    NextState = ProcessState.STANDBY
-                else:
-                    NextState = ProcessState.SEARCHING_TARGET
-
-            elif State == ProcessState.TARGET_TRACKING:
-                sounds.play_target_found()
-                time.sleep(0.2)
-                status, angle = camera.tracking_status()
-                if   status == 1:
-                    movements.go_to_target_tracking(angle)
-                    NextState = ProcessState.TARGET_LOCKED
-                elif status == -1:
-                    NextState = ProcessState.PREPARE_FOR_SEARCHING_TAGET
-
-            elif State == ProcessState.TARGET_LOCKED:
-                    sounds.play_firing()
-                    servo.guns_lights(128)
-                    movements.go_to_target_firing(5)
-                    sounds.stop_firing()
-                    servo.guns_lights(0)
-                    NextState = ProcessState.TARGET_LOST
-            
-            elif State == ProcessState.TARGET_LOST:
-                sounds.play_target_lost()
-                time.sleep(0.2)
-                movements.go_to_target_lost()
-                camera.tracking_finished()
-                NextState = ProcessState.PREPARE_FOR_SEARCHING_TAGET
-                
-            elif State == ProcessState.DUMMY_SEARCH:
                 sounds.play_searching(5)
                 movements.go_to_searching()
                 time.sleep(1)
@@ -194,9 +93,24 @@ def process_manager():
                     time.sleep(1) # Gives us some time to stop any already playing sounds
                     sounds.play_deactivated()
                     movements.go_to_standby()
+                    time.sleep(1)
                     NextState = ProcessState.STANDBY
                 else:
-                    NextState = ProcessState.DUMMY_SEARCH
+                    NextState = ProcessState.SEARCHING_TARGET
+##############################################################################################
+##############################################################################################
+            elif State == ProcessState.TARGET_TRACKING:
+                sounds.play_target_found()
+                time.sleep(1)
+                NextState = ProcessState.TARGET_LOCKED
+
+            elif State == ProcessState.TARGET_LOCKED:
+                    sounds.play_firing()
+                    servo.guns_lights(128)
+                    movements.go_to_target_firing(5)
+                    sounds.stop_firing()
+                    servo.guns_lights(0)
+                    NextState = ProcessState.STANDBY
 
             elif State == ProcessState.PARTY_MODE:
                 party_song = utils.WIFE
@@ -208,28 +122,32 @@ def process_manager():
                 movements.go_to_standby()
                 time.sleep(1)
                 NextState = ProcessState.STANDBY
-                
+##############################################################################################
+##############################################################################################
             elif State == ProcessState.ERROR:
                 time.sleep(1)
                 print ("Error at: " + str(Error_raised_at))
+                servo.amp_power(1)
                 sounds.play_error_sound()
                 time.sleep(2)
                 break
 
         print("Process Manager stopped with an error")
-        kill_all_threads()
+        servo.amp_power(1)
         servo.disable_servos()
         sounds.play_restarting_sound()
         time.sleep(2)
+        servo.amp_power(0)
         return 1
 
     except Exception as e:
         print ("Error while in State: " + str(State) + " NextState: " + str(NextState))
         traceback.print_exc()
+        servo.amp_power(1)
         servo.disable_servos()
-        kill_all_threads()
         sounds.play_error_sound()
         time.sleep(2)
+        servo.amp_power(0)
         return -1
         ########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ##########TEMP CHANGE TO 1 WHEN THE STARTER SCRIPT IS ADDED ####

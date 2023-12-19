@@ -7,8 +7,8 @@ WING_LEFT_PIN = 25
 WING_RIGHT_PIN = 8
 WING_ROTATE_PIN = 24
 TURRET_ROTATE_PIN = 23
-LEFT_LED_PIN = 20
-RIGHT_LED_PIN = 7
+GUN_LED_PIN = 20
+AMP_PIN = 7
 EYE_LED_PIN = 16
 
 # Servo PWM width limits per servo
@@ -30,17 +30,16 @@ def start_gpio():
    pi = pigpio.pi()
    if not pi.connected:
       return -1
-   # Setup GPIO for LEDs
-   pi.set_mode(LEFT_LED_PIN, pigpio.OUTPUT)
-   pi.set_mode(RIGHT_LED_PIN, pigpio.OUTPUT)
+   # Setup GPIOs
+   pi.set_mode(GUN_LED_PIN, pigpio.OUTPUT)
+   pi.set_mode(AMP_PIN, pigpio.OUTPUT)
    pi.set_mode(EYE_LED_PIN, pigpio.OUTPUT)
    # Make sure pull-up resistors are on
-   pi.set_pull_up_down(LEFT_LED_PIN, pigpio.PUD_DOWN)
-   pi.set_pull_up_down(RIGHT_LED_PIN, pigpio.PUD_DOWN)
+   pi.set_pull_up_down(GUN_LED_PIN, pigpio.PUD_DOWN)
+   pi.set_pull_up_down(AMP_PIN, pigpio.PUD_DOWN)
    pi.set_pull_up_down(EYE_LED_PIN, pigpio.PUD_DOWN)
    # Setp PWM frequency for gun LEDs to 10hz
-   pi.set_PWM_frequency(LEFT_LED_PIN, 10)
-   pi.set_PWM_frequency(RIGHT_LED_PIN, 10)
+   pi.set_PWM_frequency(GUN_LED_PIN, 10)
    return 0
 
 def movement_maker(pin1, desired_pulsewidth, pin2, desired_pulsewidth_extra):
@@ -189,8 +188,10 @@ def eye_light(brightness):
    pi.set_PWM_dutycycle(EYE_LED_PIN, brightness)
 
 def guns_lights(brightness):
-   pi.set_PWM_dutycycle(LEFT_LED_PIN, brightness)
-   pi.set_PWM_dutycycle(RIGHT_LED_PIN, brightness)
+   pi.set_PWM_dutycycle(GUN_LED_PIN, brightness)
+
+def amp_power(power):
+   pi.write(AMP_PIN,power)
 
 def disable_servos():
    pi.set_servo_pulsewidth(WING_LEFT_PIN, 0)
@@ -204,5 +205,5 @@ def kill_servos_and_leds():
    pi.set_servo_pulsewidth(WING_ROTATE_PIN, 0)
    pi.set_servo_pulsewidth(TURRET_ROTATE_PIN, 0)
    pi.set_PWM_dutycycle(EYE_LED_PIN, 0)
-   pi.set_PWM_dutycycle(LEFT_LED_PIN, 0)
-   pi.set_PWM_dutycycle(RIGHT_LED_PIN, 0)
+   pi.set_PWM_dutycycle(GUN_LED_PIN, 0)
+   pi.set_PWM_dutycycle(AMP_PIN, 0)
